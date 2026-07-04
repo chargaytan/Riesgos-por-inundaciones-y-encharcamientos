@@ -140,10 +140,46 @@
   }
   .leaflet-control-attribution a{ color:var(--accent) !important; }
 
+  /* Mobile: floating toggle + collapsible bottom sheet, map stays fully free to pan/zoom */
+  .mobile-toggle{ display:none; }
+  .sheet-backdrop{ display:none; }
+
   @media (max-width: 760px){
-    .panel{ width: calc(100vw - 40px); top:auto; bottom:150px; right:20px; left:20px; }
-    .gauge-wrap{ width:calc(100vw - 40px); left:20px; right:20px; bottom:20px; }
-    .subtitle{ max-width:80vw; }
+    .header{ padding:14px 16px 10px 16px; }
+    .subtitle{ max-width:82vw; font-size:12px; }
+
+    /* Hidden by default; only appear when the sheet is opened */
+    .panel, .gauge-wrap{ display:none; }
+
+    .mobile-toggle{
+      display:flex; align-items:center; gap:8px;
+      position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+      z-index:1200; padding:11px 18px; border-radius:30px; border:1px solid var(--panel-border);
+      background:var(--panel); color:var(--ink); font-family:'IBM Plex Mono',monospace;
+      font-size:12px; letter-spacing:.04em; box-shadow:0 8px 24px rgba(0,0,0,0.45);
+    }
+    .mobile-toggle .dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); }
+
+    .sheet-backdrop{
+      position:fixed; inset:0; z-index:1150; background:rgba(0,0,0,0.35);
+    }
+    body.sheet-open .sheet-backdrop{ display:block; }
+
+    body.sheet-open .panel{
+      display:flex; flex-direction:column;
+      position:fixed; left:0; right:0; bottom:0; top:auto; width:100%;
+      max-height:72vh; border-radius:18px 18px 0 0; z-index:1200;
+      box-shadow:0 -10px 40px rgba(0,0,0,0.5);
+    }
+    body.sheet-open .layer-list{ overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; }
+    /* on mobile the gauge is physically moved inside .panel via JS, so style it as a nested block */
+    .panel .gauge-wrap{
+      display:block; position:static; width:auto; margin:0 16px 14px 16px;
+      box-shadow:none; border:none; background:transparent; padding:10px 0 0 0;
+      border-top:1px solid var(--panel-border);
+    }
+    body.sheet-open .panel-foot{ padding-bottom:64px; }
+    body.sheet-open .mobile-toggle{ background:var(--accent-dim); border-color:var(--accent-dim); }
   }
 </style>
 </head>
@@ -174,6 +210,9 @@
   <div class="gauge-bar" id="gaugeBar"></div>
   <div class="gauge-ticks"><span>0%</span><span>50%</span><span>100%</span></div>
 </div>
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<button class="mobile-toggle" id="mobileToggle"><span class="dot"></span><span id="mobileToggleLabel">Niveles y leyenda</span></button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
@@ -344,6 +383,40 @@ function renderGauge(){
   document.getElementById('gaugeTotalPct').textContent = activeTotal.toFixed(1) + ' km² visibles';
 }
 renderGauge();
+
+// --- Mobile bottom-sheet behavior ---
+// Map stays fully pannable/zoomable at all times; the legend+gauge collapse
+// into a floating toggle + bottom sheet on small screens so they never
+// permanently cover the map.
+const mq = window.matchMedia('(max-width: 760px)');
+const panelEl = document.getElementById('panel');
+const gaugeEl = document.querySelector('.gauge-wrap');
+const panelFootEl = document.querySelector('.panel-foot');
+const toggleBtn = document.getElementById('mobileToggle');
+const toggleLabel = document.getElementById('mobileToggleLabel');
+const backdrop = document.getElementById('sheetBackdrop');
+
+function layoutForMobile(isMobile){
+  if(isMobile){
+    if(gaugeEl.parentElement !== panelEl){ panelEl.insertBefore(gaugeEl, panelFootEl); }
+  } else {
+    if(gaugeEl.parentElement !== document.body){ document.body.appendChild(gaugeEl); }
+    document.body.classList.remove('sheet-open');
+    toggleLabel.textContent = 'Niveles y leyenda';
+  }
+}
+layoutForMobile(mq.matches);
+mq.addEventListener('change', e => layoutForMobile(e.matches));
+
+function toggleSheet(){
+  const open = document.body.classList.toggle('sheet-open');
+  toggleLabel.textContent = open ? 'Cerrar' : 'Niveles y leyenda';
+  // give the map a moment to settle since its container size never
+  // actually changes, but this keeps zoom controls responsive on some browsers
+  setTimeout(()=> map.invalidateSize(), 50);
+}
+toggleBtn.addEventListener('click', toggleSheet);
+backdrop.addEventListener('click', toggleSheet);
 </script>
 </body>
 </html>
